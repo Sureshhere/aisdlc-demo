@@ -28,32 +28,9 @@ jobs:
           cat pr_short.diff
 
       - name: Review with Claude
-        id: review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          python3 << 'PYTHON_SCRIPT'
-          import anthropic
-          import os
-          
-          with open('pr_short.diff', 'r') as f:
-              diff = f.read()
-          
-          client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-          message = client.messages.create(
-              model="claude-haiku-4-5-20251001",
-              max_tokens=800,
-              messages=[{
-                  "role": "user",
-                  "content": f"Review this PR diff for security issues, bugs, and code quality:\n\n{diff}\n\nProvide a concise review."
-              }]
-          )
-          
-          review = message.content[0].text
-          with open('review.txt', 'w') as f:
-              f.write(review)
-          print(review)
-          PYTHON_SCRIPT
+        run: python3 .github/review_pr.py
 
       - name: Post review
         uses: actions/github-script@v7
