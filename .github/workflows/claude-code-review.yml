@@ -1,27 +1,80 @@
-name: Claude Code Review
+name: Claude PR Review (Simple)
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, synchronize, reopened]
 
 jobs:
-  claude-review:
+  review:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
       issues: write
-      id-token: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Post Claude Review Comment
-        uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: '--model claude-haiku-4-5-20251001'
-          track_progress: true
+          fetch-depth: 0
 
+      - name: Get PR changes
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get the diff
+          gh pr diff $PR_NUMBER > /tmp/changes.diff
+          
+          # Count files changed
+          FILES_CHANGED=$(gh pr view $PR_NUMBER --json files --jq '.files | length')
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+          
+          # Get file list
+          gh pr view $PR_NUMBER --json files -t '{{range .files}}{{.path}}{{"\n"}}{{end}}' > /tmp/file_list.txt
+
+      - name: Review with Claude
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Call Claude API to review the diff
+          DIFF=$(cat /tmp/changes.diff)
+          FILES=$(cat /tmp/file_list.txt)
+          
+          PROMPT="Review this pull request code changes. Analyze for:\n1. What the changes do\n2. Security issues or bugs\n3. Code quality concerns\n\nFiles changed:\n$FILES\n\nDiff:\n$DIFF"
+          
+          REVIEW=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{
+              "model": "claude-haiku-4-5-20251001",
+              "max_tokens": 1024,
+              "messages": [{"role": "user", "content": "'"$PROMPT"'"}]
+            }' | jq -r '.content[0].text')
+          
+          # Save review to file
+          echo "$REVIEW" > /tmp/review.txt
+          
+          # Escape for GitHub output
+          echo "result<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post review comment
+        if: steps.review.outputs.result != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW: ${{ steps.review.outputs.result }}
+        run: |
+          COMMENT="## 🤖 Claude Code Review
+
+$REVIEW
+
+---
+*Review performed by Claude Haiku*"
+          
+          gh pr comment $PR_NUMBER -b "$COMMENT"
