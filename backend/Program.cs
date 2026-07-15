@@ -17,6 +17,9 @@ app.UseHttpsRedirection();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
    .WithName("HealthCheck");
 
+app.MapGet("/version", () => Results.Ok(new { version = "1.0.0", environment = app.Environment.EnvironmentName }))
+   .WithName("Version");
+
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
