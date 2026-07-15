@@ -36,6 +36,23 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast");
 
+// Vulnerable endpoint - intentional security issues for Claude to catch
+app.MapPost("/login", (string username, string password) =>
+{
+    // ISSUE 1: Hardcoded credentials (security risk)
+    if (username == "admin" && password == "password123")
+    {
+        // ISSUE 2: No error handling
+        var token = "secret_token_" + Guid.NewGuid().ToString();
+        return Results.Ok(new { token = token, message = "Login successful" });
+    }
+    
+    // ISSUE 3: Missing input validation - no null checks
+    return Results.Unauthorized();
+})
+.WithName("Login")
+.WithOpenApi();
+
 app.Run();
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
