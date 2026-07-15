@@ -11,6 +11,9 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Request Claude Review
         env:
           GH_TOKEN: ${{ github.token }}
