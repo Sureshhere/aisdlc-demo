@@ -36,10 +36,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: '--model claude-haiku-4-5-20251001'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-haiku-4-5-20251001
           use_sticky_comment: true
           show_full_output: true
-          prompt: |
+          direct_prompt: |
             Please review this pull request. Analyze the changes and post a summary covering:
             - What the change does
             - Any bugs, security issues, or problems
