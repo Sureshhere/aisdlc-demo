@@ -14,60 +14,61 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Get PR diff
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Get PR changes
         id: diff
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr.diff
-          echo "diff=$(cat /tmp/pr.diff | head -100)" >> $GITHUB_OUTPUT
+          gh pr diff ${{ github.event.pull_request.number }} > pr.diff
+          head -200 pr.diff > pr_short.diff
+          cat pr_short.diff
 
-      - name: Call Anthropic API for review
-        id: claude
+      - name: Review with Claude
+        id: review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PR_DIFF: ${{ steps.diff.outputs.diff }}
         run: |
-          cat > /tmp/review_request.sh << 'EOF'
-          #!/bin/bash
+          python3 << 'PYTHON_SCRIPT'
+          import anthropic
+          import os
           
-          RESPONSE=$(curl -s -X POST https://api.anthropic.com/v1/messages \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
-            -d '{
-              "model": "claude-haiku-4-5-20251001",
-              "max_tokens": 1024,
-              "messages": [
-                {
+          with open('pr_short.diff', 'r') as f:
+              diff = f.read()
+          
+          client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+          message = client.messages.create(
+              model="claude-haiku-4-5-20251001",
+              max_tokens=800,
+              messages=[{
                   "role": "user",
-                  "content": "Review this PR diff for security issues, bugs, and code quality:\n\n'"$PR_DIFF"'\n\nProvide a concise review focusing on critical issues."
-                }
-              ]
-            }')
+                  "content": f"Review this PR diff for security issues, bugs, and code quality:\n\n{diff}\n\nProvide a concise review."
+              }]
+          )
           
-          echo "$RESPONSE" > /tmp/claude_response.json
-          echo "response=$(echo $RESPONSE | jq -r '.content[0].text')" >> $GITHUB_OUTPUT
-          EOF
-          
-          chmod +x /tmp/review_request.sh
-          /tmp/review_request.sh
+          review = message.content[0].text
+          with open('review.txt', 'w') as f:
+              f.write(review)
+          print(review)
+          PYTHON_SCRIPT
 
-      - name: Post review as comment
-        if: steps.claude.outputs.response
+      - name: Post review
         uses: actions/github-script@v7
         with:
           github-token: ${{ github.token }}
           script: |
-            github.rest.issues.createComment({
+            const fs = require('fs');
+            const review = fs.readFileSync('review.txt', 'utf8');
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## 🤖 Claude Code Review\n\n' + `${{ steps.claude.outputs.response }}`
-            })
+              body: '## 🤖 Claude Code Review\n\n' + review
+            });
+
 
 
 
