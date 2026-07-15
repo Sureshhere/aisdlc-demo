@@ -53,6 +53,23 @@ app.MapPost("/login", (string username, string password) =>
 .WithName("Login")
 .WithOpenApi();
 
+// Password reset endpoint with vulnerabilities
+app.MapPost("/reset-password", (string email) =>
+{
+    // VULNERABILITY 1: No rate limiting - allows brute force attacks
+    // VULNERABILITY 2: No email verification - information disclosure (confirms if email exists)
+    // VULNERABILITY 3: No CSRF token validation
+    // VULNERABILITY 4: Accepts any email without validation
+    
+    if (string.IsNullOrEmpty(email))
+        return Results.BadRequest("Email is required");
+    
+    // Always returns success, revealing if email exists in system
+    return Results.Ok(new { message = "If this email is registered, you'll receive a password reset link", email = email });
+})
+.WithName("ResetPassword")
+.WithOpenApi();
+
 app.Run();
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
