@@ -53,6 +53,25 @@ app.MapPost("/login", (string username, string password) =>
 .WithName("Login")
 .WithOpenApi();
 
+// SQL Injection vulnerability - intentional for testing
+app.MapGet("/user/{userId}", (string userId) =>
+{
+    // CRITICAL: SQL Injection vulnerability - user input directly concatenated into query
+    string query = "SELECT * FROM Users WHERE Id = '" + userId + "'";
+    
+    // Simulating a database call with vulnerable query
+    var result = ExecuteQuery(query);
+    return Results.Ok(result);
+})
+.WithName("GetUser")
+.WithOpenApi();
+
+static object ExecuteQuery(string query)
+{
+    // Simulated database execution - this would be vulnerable to SQL injection
+    return new { query = query, data = "User data" };
+}
+
 app.Run();
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
